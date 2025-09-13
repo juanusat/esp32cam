@@ -26,3 +26,8 @@
 6. **Notas adicionales:**
    - El sensor PIR puede tardar unos segundos en estabilizarse tras encenderse.
    - Si usas otro pin GPIO, actualiza el código en consecuencia.
+
+7. **Almacenamiento en SD (ESP32-CAM):**
+   - El código utiliza las librerías `FS.h` y `SD_MMC.h` para guardar imágenes cuando se detecta movimiento.
+   - La tarjeta microSD se inserta directamente en el slot de la ESP32-CAM.
+   - Las imágenes se guardan automáticamente en la carpeta `/sensor-pir/` con nombres únicos basados en timestamp.

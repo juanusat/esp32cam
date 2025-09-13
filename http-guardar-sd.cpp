@@ -18,8 +18,8 @@
 #include "camera_index.h"
 #include "Arduino.h"
 #include "FS.h"
-#include "SD.h"
-#define SD_CS 5 // Cambia el pin si tu módulo SD usa otro
+#include "SD_MMC.h"
+// SD_MMC no requiere pin CS específico para ESP32-CAM
 
 #include "fb_gfx.h"
 #include "fd_forward.h"
@@ -71,7 +71,7 @@ const int num_faces = 4;
 bool save_face_to_sd(uint8_t* buf, size_t len, const char* filename) {
     String path = "/images/";
     path += filename;
-    File file = SD.open(path.c_str(), FILE_WRITE);
+    File file = SD_MMC.open(path.c_str(), FILE_WRITE);
     if (!file) {
         Serial.println("No se pudo abrir el archivo para escribir: " + path);
         return false;
@@ -87,7 +87,7 @@ void load_faces_from_sd(face_id_list* id_list) {
     for (int i = 0; i < num_faces; i++) {
         String path = "/images/";
         path += image_names[i];
-        File file = SD.open(path.c_str());
+        File file = SD_MMC.open(path.c_str());
         if (!file) {
             Serial.println("No se pudo abrir la imagen: " + path);
             continue;
@@ -703,13 +703,13 @@ void startCameraServer(){
 
 
     ra_filter_init(&ra_filter, 20);
-    // Inicializar SD
-    if (!SD.begin(SD_CS)) {
+    // Inicializar SD_MMC para ESP32-CAM
+    if (!SD_MMC.begin()) {
         Serial.println("No se pudo inicializar la tarjeta SD");
     } else {
         Serial.println("SD inicializada correctamente");
-        if (!SD.exists("/images")) {
-            SD.mkdir("/images");
+        if (!SD_MMC.exists("/images")) {
+            SD_MMC.mkdir("/images");
         }
         // Cargar imágenes de la SD al iniciar
         load_faces_from_sd(&id_list);
