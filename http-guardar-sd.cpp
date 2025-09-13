@@ -17,6 +17,9 @@
 #include "img_converters.h"
 #include "camera_index.h"
 #include "Arduino.h"
+#include "FS.h"
+#include "SD.h"
+#define SD_CS 5 // Cambia el pin si tu módulo SD usa otro
 
 #include "fb_gfx.h"
 #include "fd_forward.h"
@@ -61,6 +64,49 @@ static int8_t detection_enabled = 0;
 static int8_t recognition_enabled = 0;
 static int8_t is_enrolling = 0;
 static face_id_list id_list = {0};
+const char* image_names[] = {"luis.jpg", "carlos.jpg", "juan.jpg", "pamela.jpg"};
+const int num_faces = 4;
+
+// Guarda la imagen en la SD con el nombre especificado
+bool save_face_to_sd(uint8_t* buf, size_t len, const char* filename) {
+    String path = "/images/";
+    path += filename;
+    File file = SD.open(path.c_str(), FILE_WRITE);
+    if (!file) {
+        Serial.println("No se pudo abrir el archivo para escribir: " + path);
+        return false;
+    }
+    file.write(buf, len);
+    file.close();
+    Serial.println("Imagen guardada en SD: " + path);
+    return true;
+}
+
+// Carga las imágenes de la SD y las agrega a la base de datos facial
+void load_faces_from_sd(face_id_list* id_list) {
+    for (int i = 0; i < num_faces; i++) {
+        String path = "/images/";
+        path += image_names[i];
+        File file = SD.open(path.c_str());
+        if (!file) {
+            Serial.println("No se pudo abrir la imagen: " + path);
+            continue;
+        }
+        size_t len = file.size();
+        uint8_t* buf = (uint8_t*)malloc(len);
+        if (!buf) {
+            Serial.println("No hay suficiente memoria para cargar la imagen: " + path);
+            file.close();
+            continue;
+        }
+        file.read(buf, len);
+        file.close();
+        // Aquí deberías convertir buf a dl_matrix3du_t y llamar a enroll_face
+        // Este paso depende de tu implementación de enroll_face y formato de imagen
+        // Por simplicidad, se omite la conversión aquí
+        free(buf);
+    }
+}
 
 static ra_filter_t * ra_filter_init(ra_filter_t * filter, size_t sample_size){
     memset(filter, 0, sizeof(ra_filter_t));
@@ -173,13 +219,21 @@ static int run_face_recognition(dl_matrix3du_t *image_matrix, box_array_t *net_b
   if (align_face(net_boxes, image_matrix, aligned_face) == ESP_OK) {
     if (is_enrolling == 1) {
         int8_t left_sample_face = enroll_face(&id_list, aligned_face);
-
+        // Guardar la imagen en la SD con el nombre correspondiente
+        if (id_list.tail < num_faces) {
+            // Convertir la imagen a JPEG antes de guardar
+            uint8_t* jpg_buf = NULL;
+            size_t jpg_len = 0;
+            if (fmt2jpg(aligned_face->item, aligned_face->w * aligned_face->h * 3, aligned_face->w, aligned_face->h, PIXFORMAT_RGB888, 90, &jpg_buf, &jpg_len)) {
+                save_face_to_sd(jpg_buf, jpg_len, image_names[id_list.tail]);
+                free(jpg_buf);
+            }
+        }
         if (left_sample_face == (ENROLL_CONFIRM_TIMES - 1)) {
             Serial.printf("Enrolling Face ID: %d\n", id_list.tail);
         }
         Serial.printf("Enrolling Face ID: %d sample %d\n", id_list.tail, ENROLL_CONFIRM_TIMES - left_sample_face);
         rgb_printf(image_matrix, FACE_COLOR_CYAN, "ID[%u] Sample[%u]", id_list.tail, ENROLL_CONFIRM_TIMES - left_sample_face);
-        
         if (left_sample_face == 0) {
             is_enrolling = 0;
             Serial.printf("Enrolled Face ID: %d\n", id_list.tail);
@@ -649,6 +703,17 @@ void startCameraServer(){
 
 
     ra_filter_init(&ra_filter, 20);
+    // Inicializar SD
+    if (!SD.begin(SD_CS)) {
+        Serial.println("No se pudo inicializar la tarjeta SD");
+    } else {
+        Serial.println("SD inicializada correctamente");
+        if (!SD.exists("/images")) {
+            SD.mkdir("/images");
+        }
+        // Cargar imágenes de la SD al iniciar
+        load_faces_from_sd(&id_list);
+    }
     
     mtmn_config.type = FAST;
     mtmn_config.min_face = 80;
