@@ -1,3 +1,48 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+// Configuración de Telegram
+#define TELEGRAM_TOKEN "<TU_TOKEN_AQUI>"
+#define TELEGRAM_USER_ID "<TU_USER_ID_AQUI>"
+
+// Función para enviar imagen a Telegram
+bool send_image_to_telegram(const uint8_t* buf, size_t len) {
+    String url = "https://api.telegram.org/bot" + String(TELEGRAM_TOKEN) + "/sendPhoto";
+    HTTPClient http;
+    http.begin(url);
+    String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+    http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+    String body = "--" + boundary + "\r\n";
+    body += "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n";
+    body += String(TELEGRAM_USER_ID) + "\r\n";
+    body += "--" + boundary + "\r\n";
+    body += "Content-Disposition: form-data; name=\"photo\"; filename=\"pir.jpg\"\r\n";
+    body += "Content-Type: image/jpeg\r\n\r\n";
+    int bodyLen = body.length();
+    int totalLen = bodyLen + len + boundary.length() + 8;
+    WiFiClient *stream = http.getStreamPtr();
+    http.setTimeout(10000);
+    http.writeToStream(stream, (uint8_t*)body.c_str(), bodyLen);
+    stream->write(buf, len);
+    String end = "\r\n--" + boundary + "--\r\n";
+    http.writeToStream(stream, (uint8_t*)end.c_str(), end.length());
+    int httpCode = http.POST(nullptr, 0);
+    http.end();
+    Serial.printf("Telegram HTTP code: %d\n", httpCode);
+    return httpCode == 200;
+}
+                        if (fb->format == PIXFORMAT_JPEG) {
+                            save_image_to_sd(fb->buf, fb->len);
+                            send_image_to_telegram(fb->buf, fb->len);
+                        } else {
+                            // Convertir a JPEG si es necesario
+                            uint8_t * jpg_buf = NULL;
+                            size_t jpg_len = 0;
+                            if (frame2jpg(fb, 80, &jpg_buf, &jpg_len)) {
+                                save_image_to_sd(jpg_buf, jpg_len);
+                                send_image_to_telegram(jpg_buf, jpg_len);
+                                free(jpg_buf);
+                            }
+                        }
 // Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
